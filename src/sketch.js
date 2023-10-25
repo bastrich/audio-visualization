@@ -10,6 +10,7 @@ let spectralSkewness = 0;
 let angle = 0;
 let a = 0;
 let b = 0;
+let powerSpectrum = [];
 
 function preload() {
     sound = loadSound('audio/Kalte_Ohren_(_Remix_).mp3');
@@ -17,6 +18,7 @@ function preload() {
 
 function setup() {
     createCanvas(700, 700);
+    // createCanvas(2000, 2000);
 
     background("white");
     textAlign(CENTER, CENTER);
@@ -28,13 +30,14 @@ function setup() {
         audioContext: getAudioContext(),
         source: sound,
         bufferSize: 512,
-        featureExtractors: ["rms", "spectralSkewness", "spectralCrest"],
+        featureExtractors: ["rms", "spectralSkewness", "spectralCrest", "powerSpectrum"],
         callback: (features) => {
             // console.log(features);
             featureValues.push(features);
             spectralCrest = features.spectralCrest;
             rms = features.rms;
             spectralSkewness = features.spectralSkewness;
+            powerSpectrum = features.powerSpectrum;
         }
     });
 }
@@ -44,36 +47,99 @@ function draw() {
         return;
     }
     //
-    background("Lime");
+    background("White");
     // // fill("red")
     // // ellipse()
     //
     // drawPlot();
-    if (a < spectralSkewness) {
-        a = spectralSkewness;
-    }
-    if (b > spectralSkewness) {
-        b = spectralSkewness;
-    }
-    console.log(a)
-    console.log(b)
+    // if (a < spectralSkewness) {
+    //     a = spectralSkewness;
+    // }
+    // if (b > spectralSkewness) {
+    //     b = spectralSkewness;
+    // }
+    // console.log(a)
+    // console.log(b)
+
+
+    let averagedSpectrumRanges = buildAveragedSpectrumRanges();
+    console.log(averagedSpectrumRanges)
 
     angle += map(spectralSkewness, -0.05, 15, -0.15, 1) * 0.1;
 
     translate(width / 2, height / 2);
-    rotate(angle);
+    // rotate(angle);
     scale(map(rms, 0, 1, 1, 1.5));
+
+    sizes = []
+    for (let i = -4; i <= 4; i++) {
+        for (let j = -4; j <= 4; j++) {
+            if (!sizes[i + 4]) {
+                sizes[i + 4] = [];
+            }
+            sizes[i + 4][j + 4] = map(averagedSpectrumRanges[max(abs(i), abs(j))], 0, 1, 40, 100)
+        }
+    }
+
+    for (let i = -4; i <= 4; i++) {
+        for (let j = -4; j <= 4; j++) {
+            let xDistanceToCenter;
+            if (i === 0) {
+                xDistanceToCenter = 0;
+            } else {
+                xDistanceToCenter = sizes[i + 4][j + 4] / 2 + 20 + sizes[4][4] / 2;
+                for (let k = i - i/abs(i); abs(k) > 0; k = k - k/abs(k)) {
+                    xDistanceToCenter = xDistanceToCenter + sizes[k + 4][j + 4] + 20;
+                }
+                xDistanceToCenter *= i/abs(i);
+            }
+
+            let yDistanceToCenter
+            if (j === 0) {
+                yDistanceToCenter = 0;
+            } else {
+                yDistanceToCenter = sizes[i + 4][j + 4] / 2 + 20 + sizes[4][4] / 2;
+                for (let k = j - j/abs(j); abs(k) > 0; k = k - k/abs(k)) {
+                    yDistanceToCenter = yDistanceToCenter + sizes[i + 4][k + 4] + 20;
+                }
+                yDistanceToCenter *= j/abs(j);
+            }
+
+            drawSquare(xDistanceToCenter, yDistanceToCenter, sizes[i + 4][j + 4]);
+        }
+    }
+
     for (let x = - width / 2 - 160; x < width / 2 + 160; x += 80) {
         for (let y = - height / 2- 160; y < height / 2 + 160; y += 80) {
             push();
             // translate(x, y)
             // rotate(-angle);
             // translate(-75, -75)
-            drawSquare(x, y);
+            // drawSquare(x, y, 50);
             pop();
         }
     }
 
+}
+
+function buildAveragedSpectrumRanges() {
+    let n = 5;
+    let minIndex = 1;
+    let maxIndex = 300;
+    let targetPowerSpectrum = powerSpectrum.slice(minIndex, maxIndex + 1);
+
+    let result = []
+    for(let i = 0; i < n; i++) {
+        result.push(avg(targetPowerSpectrum.slice(i * targetPowerSpectrum.length / 5, (i + 1) * targetPowerSpectrum.length / 5)))
+    }
+
+    result[0] *= 0.0001;
+    // result[1] *= 2;
+    // result[2] *= 3;
+    // result[3] *= 4;
+    // result[4] *= 5;
+
+    return result;
 }
 
 function mouseClicked() {
@@ -84,45 +150,41 @@ function mouseClicked() {
     }
 }
 
-function drawSquare(x, y) {
-    let w = 50; // Ширина и высота прямоугольника
-    let h = 50;
-
+function drawSquare(x, y, size) {
     noiseSeed(spectralCrest); // Задайте начальное значение для шума
-    let noiseFactor = map(spectralCrest, 0, 30, 0, 50); // Максимальное отклонение по оси Y
+    let noiseFactor = map(spectralCrest, 0, 30, 0, size); // Максимальное отклонение по оси Y
 
+    push();
+    translate(- size / 2, - size / 2);
 
-    stroke(color("blue"));
+    // stroke(color("blue"));
+    noStroke();
     fill(color("DeepPink"));
     beginShape();
 
-
-    let startX;
-    let startY;
-    let lastX;
-    let lastY;
-
-    for (let i = x; i <= x + w; i++) {
+    for (let i = x; i <= x + size; i++) {
         let yOffset = noise(i * 0.1) * noiseFactor;
         vertex(i, y - yOffset);
     }
 
-    for (let i = y ; i <= y + h; i++) {
+    for (let i = y ; i <= y + size; i++) {
         let xOffset = noise(i * 0.1) * noiseFactor;
-        vertex(x + w + xOffset, i);
+        vertex(x + size + xOffset, i);
     }
 
-    for (let i = x + w; i >= x; i--) {
+    for (let i = x + size; i >= x; i--) {
         let yOffset = noise(i * 0.1) * noiseFactor;
-        vertex(i, y + h + yOffset);
+        vertex(i, y + size + yOffset);
     }
 
-    for (let i = y + h; i >= y; i--) {
+    for (let i = y + size; i >= y; i--) {
         let xOffset = noise(i * 0.1) * noiseFactor;
         vertex(x - xOffset, i);
     }
 
     endShape(CLOSE);
+
+    pop();
 }
 
 // function drawPlot() {
@@ -154,7 +216,7 @@ function drawSquare(x, y) {
 function avg(array) {
     let sum = 0;
     for(let i = 0; i < array.length; i++) {
-        sum += array[i].zcr;
+        sum += array[i];
     }
     return sum / array.length;
 }
