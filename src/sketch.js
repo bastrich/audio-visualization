@@ -6,18 +6,37 @@ let featureMax = 1
 
 let spectralCrest = 0;
 let rms = 1;
+
 let spectralSkewness = 0;
+let spectralSkewnessMin = 999;
+let spectralSkewnessMax = -999;
+
 let angle = 0;
 let a = 0;
 let b = 0;
 let powerSpectrum = [];
+
+let spectralCentroid = 0;
+let spectralCentroidMin = 999;
+let spectralCentroidMax = -999;
+let minFreq = 999;
+let maxFreq = -999;
+
+let averagedSpectrumRangesMin = [9999, 9999, 9999, 9999, 9999];
+let averagedSpectrumRangesMax = [-9999, -9999, -9999, -9999, -9999];
+
+let chroma = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+
+let perceptualSharpness = 0;
+let perceptualSharpnessMin = 999;
+let perceptualSharpnessMax = -999;
 
 function preload() {
     sound = loadSound('audio/Kalte_Ohren_(_Remix_).mp3');
 }
 
 function setup() {
-    createCanvas(700, 700);
+    createCanvas(800, 800);
     // createCanvas(2000, 2000);
 
     background("white");
@@ -30,14 +49,17 @@ function setup() {
         audioContext: getAudioContext(),
         source: sound,
         bufferSize: 512,
-        featureExtractors: ["rms", "spectralSkewness", "spectralCrest", "powerSpectrum"],
+        featureExtractors: ["rms", "spectralSkewness", "spectralCrest", "powerSpectrum", "amplitudeSpectrum", "spectralCentroid", "chroma", "perceptualSharpness"],
         callback: (features) => {
             // console.log(features);
             featureValues.push(features);
             spectralCrest = features.spectralCrest;
             rms = features.rms;
             spectralSkewness = features.spectralSkewness;
-            powerSpectrum = features.powerSpectrum;
+            powerSpectrum = features.amplitudeSpectrum;
+            spectralCentroid = round(features.spectralCentroid);
+            chroma = features.chroma;
+            perceptualSharpness = features.spectralCrest;
         }
     });
 }
@@ -47,7 +69,7 @@ function draw() {
         return;
     }
     //
-    background("White");
+    background("white");
     // // fill("red")
     // // ellipse()
     //
@@ -61,14 +83,56 @@ function draw() {
     // console.log(a)
     // console.log(b)
 
+    let topColor = color(255, 0, 0); // Красный цвет
+
+    if (spectralCentroid < spectralCentroidMin) {
+        spectralCentroidMin = spectralCentroid;
+    }
+    if (spectralCentroid > spectralCentroidMax) {
+        spectralCentroidMax = spectralCentroid;
+    }
+
+
+    let bottomColor = color(map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255), (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 85) % 255, (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 170) % 255); // Синий цвет
+    // console.log(spectralCentroid + " --- " + minFreq + " --- " + maxFreq); // Синий цвет
+
+    for (let x = 0; x <= 2 * width; x++) {
+        let lerpAmount = dist(0, 0, x, x) / dist(0, 0, width, height) / 2;
+        let currentColor = lerpColor(topColor, bottomColor, lerpAmount);
+        stroke(currentColor);
+        line(0, x, x, 0);
+    }
+
 
     let averagedSpectrumRanges = buildAveragedSpectrumRanges();
-    console.log(averagedSpectrumRanges)
+    // if (!averagedSpectrumRangesMin) {
+    //     averagedSpectrumRangesMin = averagedSpectrumRanges;
+    // }
+    // if (!averagedSpectrumRangesMax) {
+    //     averagedSpectrumRangesMax = averagedSpectrumRanges;
+    // }
+    for (let i = 0; i < averagedSpectrumRanges.length; i++) {
+        if (averagedSpectrumRanges[i] < averagedSpectrumRangesMin[i]) {
+            averagedSpectrumRangesMin[i] = averagedSpectrumRanges[i];
+        }
+        if (averagedSpectrumRanges[i] > averagedSpectrumRangesMax[i]) {
+            averagedSpectrumRangesMax[i] = averagedSpectrumRanges[i];
+        }
+    }
 
-    angle += map(spectralSkewness, -0.05, 15, -0.15, 1) * 0.1;
+    // console.log(averagedSpectrumRanges)
+
+    if(spectralSkewness < spectralSkewnessMin) {
+        spectralSkewnessMin = spectralSkewness;
+    }
+    if(spectralSkewness > spectralSkewnessMax) {
+        spectralSkewnessMax = spectralSkewness;
+    }
+    angle = map(spectralSkewness, spectralSkewnessMin, spectralSkewnessMax, -0.15, 0.15);
+    // angle += spectralSkewness;
 
     translate(width / 2, height / 2);
-    // rotate(angle);
+    rotate(angle);
     scale(map(rms, 0, 1, 1, 1.5));
 
     sizes = []
@@ -77,7 +141,9 @@ function draw() {
             if (!sizes[i + 4]) {
                 sizes[i + 4] = [];
             }
-            sizes[i + 4][j + 4] = map(averagedSpectrumRanges[max(abs(i), abs(j))], 0, 1, 40, 100)
+            let index = max(abs(i), abs(j));
+            // console.log(averagedSpectrumRangesMin[index] + " --- " + averagedSpectrumRangesMax[index])
+            sizes[i + 4][j + 4] = map(averagedSpectrumRanges[index], averagedSpectrumRangesMin[index], averagedSpectrumRangesMax[index], 30, 70)
         }
     }
 
@@ -105,27 +171,55 @@ function draw() {
                 yDistanceToCenter *= j/abs(j);
             }
 
-            drawSquare(xDistanceToCenter, yDistanceToCenter, sizes[i + 4][j + 4]);
+            // Аккорд 1: C - D♯ - F♯ - A
+            // Аккорд 2: D - F - G♯ - B
+            // Аккорд 3: E - G - A♯ - C♯
+            //
+            // C, C♯, D, D♯, E, F, F♯, G, G♯, A, A♯, B
+
+            let index = max(abs(i), abs(j));
+
+            let colorRed = map(chroma[index], 0, 1, 0, 255);
+            let colorGreen = map(chroma[index + 3], 0, 1, 0, 255);
+            let colorBlue = map(chroma[index + 6], 0, 1, 0, 255);
+            let colorAlpha = map(chroma[index + 7], 0, 1, 200, 255);
+
+            let maxColorCoef = 255 / max(colorRed, colorGreen, colorBlue);
+            colorRed *= maxColorCoef;
+            colorGreen *= maxColorCoef;
+            colorBlue *= maxColorCoef;
+
+
+            drawFigure(xDistanceToCenter, yDistanceToCenter, sizes[i + 4][j + 4], color(colorRed, colorGreen, colorBlue));
         }
+
+        // console.log(chroma)
     }
 
-    for (let x = - width / 2 - 160; x < width / 2 + 160; x += 80) {
-        for (let y = - height / 2- 160; y < height / 2 + 160; y += 80) {
-            push();
-            // translate(x, y)
-            // rotate(-angle);
-            // translate(-75, -75)
-            // drawSquare(x, y, 50);
-            pop();
-        }
-    }
+    // for (let x = - width / 2 - 160; x < width / 2 + 160; x += 80) {
+    //     for (let y = - height / 2- 160; y < height / 2 + 160; y += 80) {
+    //         push();
+    //         // translate(x, y)
+    //         // rotate(-angle);
+    //         // translate(-75, -75)
+    //         // drawSquare(x, y, 50);
+    //         pop();
+    //     }
+    // }
 
 }
 
 function buildAveragedSpectrumRanges() {
     let n = 5;
-    let minIndex = 1;
-    let maxIndex = 300;
+    // console.log(spectralCentroid)
+    let minIndex = max(min(spectralCentroid - 30, minFreq), 0);
+    let maxIndex = min(max(spectralCentroid + 30, maxFreq), 255);
+    if (minIndex < minFreq) {
+        minFreq = minIndex;
+    }
+    if (maxIndex > maxFreq) {
+        maxFreq = maxIndex;
+    }
     let targetPowerSpectrum = powerSpectrum.slice(minIndex, maxIndex + 1);
 
     let result = []
@@ -133,7 +227,7 @@ function buildAveragedSpectrumRanges() {
         result.push(avg(targetPowerSpectrum.slice(i * targetPowerSpectrum.length / 5, (i + 1) * targetPowerSpectrum.length / 5)))
     }
 
-    result[0] *= 0.0001;
+    // result[0] *= 0.0001;
     // result[1] *= 2;
     // result[2] *= 3;
     // result[3] *= 4;
@@ -150,41 +244,30 @@ function mouseClicked() {
     }
 }
 
-function drawSquare(x, y, size) {
+function drawFigure(x, y, size, fillColor) {
     noiseSeed(spectralCrest); // Задайте начальное значение для шума
-    let noiseFactor = map(spectralCrest, 0, 30, 0, size); // Максимальное отклонение по оси Y
+    let noiseFactor = map(spectralCrest, 0, 12, 0, size * 0.4); // Максимальное отклонение по оси Y
 
-    push();
-    translate(- size / 2, - size / 2);
+    stroke(color("blue"));
+    // noStroke();
 
-    // stroke(color("blue"));
-    noStroke();
-    fill(color("DeepPink"));
-    beginShape();
 
-    for (let i = x; i <= x + size; i++) {
-        let yOffset = noise(i * 0.1) * noiseFactor;
-        vertex(i, y - yOffset);
+    if (perceptualSharpness < perceptualSharpnessMin) {
+        perceptualSharpnessMin = perceptualSharpness;
     }
-
-    for (let i = y ; i <= y + size; i++) {
-        let xOffset = noise(i * 0.1) * noiseFactor;
-        vertex(x + size + xOffset, i);
+    if (perceptualSharpness > perceptualSharpnessMax) {
+        perceptualSharpnessMax = perceptualSharpness;
     }
+    strokeWeight(map(perceptualSharpness, perceptualSharpnessMin, perceptualSharpnessMax, 0, 5));
 
-    for (let i = x + size; i >= x; i--) {
-        let yOffset = noise(i * 0.1) * noiseFactor;
-        vertex(i, y + size + yOffset);
-    }
 
-    for (let i = y + size; i >= y; i--) {
-        let xOffset = noise(i * 0.1) * noiseFactor;
-        vertex(x - xOffset, i);
-    }
+    fill(fillColor);
 
-    endShape(CLOSE);
 
-    pop();
+    drawCircle(x, y, size, noiseFactor);
+    // drawSquare(x, y, size, noiseFactor);
+
+
 }
 
 // function drawPlot() {
@@ -212,8 +295,88 @@ function drawSquare(x, y, size) {
 //     }
 // }
 
+function drawSquare(x, y, size, noiseFactor) {
+    push();
+    translate(- size / 2, - size / 2);
+
+
+    beginShape();
+
+    for (let i = x; i <= x + size; i++) {
+        let yOffset = noise(i * 0.1) * noiseFactor;
+        vertex(i, y - yOffset);
+    }
+
+    for (let i = y ; i <= y + size; i++) {
+        let xOffset = noise(i * 0.1) * noiseFactor;
+        vertex(x + size + xOffset, i);
+    }
+
+    for (let i = x + size; i >= x; i--) {
+        let yOffset = noise(i * 0.1) * noiseFactor;
+        vertex(i, y + size + yOffset);
+    }
+
+    for (let i = y + size; i >= y; i--) {
+        let xOffset = noise(i * 0.1) * noiseFactor;
+        vertex(x - xOffset, i);
+    }
+
+    endShape(CLOSE);
+
+    pop();
+}
+function drawTriangle(x, y, size) {
+
+    beginShape();
+
+    vertex(x, y - size / 2);
+    vertex(x - size / 2, y + size / 2);
+    vertex(x + size / 2, y + size / 2);
+
+    endShape(CLOSE);
+}
+function drawCircle(x, y, size, noiseFactor) {
+
+
+    // translate(-x);
+
+
+
+
+
+    push();
+        translate(x, y);
+        beginShape();
+
+        // rotate(PI / 2);
+        // rect(x, y, 100, 50)
+
+        for(let angle = 0; angle < TWO_PI; angle += 0.01) {
+            let xOffset = size / 2  * cos(angle);
+            let yOffset = size / 2 * sin(angle);
+            vertex(xOffset, yOffset);
+            // let xOffset = noise(i * 0.1) * noiseFactor;
+            // let yOffset = noise(i * 0.1) * noiseFactor;
+        }
+        endShape(CLOSE);
+    pop();
+
+
+
+
+
+}
+function drawPentagon(x, y, size, noiseFactor) {
+
+}
+
 
 function avg(array) {
+    if (array.length === 0) {
+        return 0;
+    }
+
     let sum = 0;
     for(let i = 0; i < array.length; i++) {
         sum += array[i];
