@@ -258,7 +258,7 @@ function drawFigure(x, y, size, fillColor) {
     if (perceptualSharpness > perceptualSharpnessMax) {
         perceptualSharpnessMax = perceptualSharpness;
     }
-    strokeWeight(map(perceptualSharpness, perceptualSharpnessMin, perceptualSharpnessMax, 0, 5));
+    strokeWeight(map(perceptualSharpness, perceptualSharpnessMin, perceptualSharpnessMax, 0, 3));
 
 
     fill(fillColor);
@@ -352,12 +352,11 @@ function drawCircle(x, y, size, noiseFactor) {
         // rotate(PI / 2);
         // rect(x, y, 100, 50)
 
-        for(let angle = 0; angle < TWO_PI; angle += 0.01) {
-            let xOffset = size / 2  * cos(angle);
-            let yOffset = size / 2 * sin(angle);
+        for(let angle = 0; angle < TWO_PI; angle += 0.02) {
+            let noiseOffset = noise(angle * 10) * noiseFactor
+            let xOffset = (size / 2 + noiseOffset) * cos(angle);
+            let yOffset = (size / 2 + noiseOffset) * sin(angle);
             vertex(xOffset, yOffset);
-            // let xOffset = noise(i * 0.1) * noiseFactor;
-            // let yOffset = noise(i * 0.1) * noiseFactor;
         }
         endShape(CLOSE);
     pop();
