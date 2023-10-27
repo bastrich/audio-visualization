@@ -1,8 +1,9 @@
-let sound;
+let audio;
 let analyzer;
+let speechRecognition;
 
-let featureValues = []
-let featureMax = 1
+let backgroundColor;
+let figureType;
 
 let spectralCrest = 0;
 let rms = 1;
@@ -32,12 +33,14 @@ let perceptualSharpnessMin = 999;
 let perceptualSharpnessMax = -999;
 
 function preload() {
-    sound = loadSound('audio/Kalte_Ohren_(_Remix_).mp3');
+    audio = loadSound('audio/Kalte_Ohren_(_Remix_).mp3');
 }
 
 function setup() {
     createCanvas(800, 800);
-    // createCanvas(2000, 2000);
+
+    backgroundColor = color("red");
+    figureType = "pentagon";
 
     background("white");
     textAlign(CENTER, CENTER);
@@ -47,12 +50,10 @@ function setup() {
 
     analyzer = Meyda.createMeydaAnalyzer({
         audioContext: getAudioContext(),
-        source: sound,
+        source: audio,
         bufferSize: 512,
         featureExtractors: ["rms", "spectralSkewness", "spectralCrest", "powerSpectrum", "amplitudeSpectrum", "spectralCentroid", "chroma", "perceptualSharpness"],
         callback: (features) => {
-            // console.log(features);
-            featureValues.push(features);
             spectralCrest = features.spectralCrest;
             rms = features.rms;
             spectralSkewness = features.spectralSkewness;
@@ -62,10 +63,26 @@ function setup() {
             perceptualSharpness = features.spectralCrest;
         }
     });
+
+    speechRecognition = new p5.SpeechRec('en-US', processSpeechInput);
+    speechRecognition.continuous = true;
+    speechRecognition.interimResults = true;
+    // speechRecognition.onError = () => {
+    //     if (audio.isLooping()) {
+    //         speechRecognition.stop();
+    //         speechRecognition.start();
+    //     }
+    // }
+    speechRecognition.onEnd = () => {
+        if (audio.isLooping()) {
+            speechRecognition.stop();
+            speechRecognition.start();
+        }
+    };
 }
 
 function draw() {
-    if (!sound.isLooping()) {
+    if (!audio.isLooping()) {
         return;
     }
     //
@@ -83,7 +100,7 @@ function draw() {
     // console.log(a)
     // console.log(b)
 
-    let topColor = color(255, 0, 0); // Красный цвет
+    let topColor = backgroundColor;
 
     if (spectralCentroid < spectralCentroidMin) {
         spectralCentroidMin = spectralCentroid;
@@ -209,6 +226,47 @@ function draw() {
 
 }
 
+function processSpeechInput() {
+    console.log(speechRecognition.resultString)
+    let recognizedText = speechRecognition.resultString.toLowerCase();
+    if (recognizedText.includes("black")) {
+        backgroundColor = color("black");
+        return;
+    }
+    if (recognizedText.includes("white")) {
+        backgroundColor = color("white");
+        return;
+    }
+    if (recognizedText.includes("red")) {
+        backgroundColor = color("red");
+        return;
+    }
+    if (recognizedText.includes("blue")) {
+        backgroundColor = color("blue");
+        return;
+    }
+    if (recognizedText.includes("green")) {
+        backgroundColor = color("green");
+        return;
+    }
+    if (recognizedText.includes("square")) {
+        figureType = "square";
+        return;
+    }
+    if (recognizedText.includes("triangle")) {
+        figureType = "triangle";
+        return;
+    }
+    if (recognizedText.includes("circle")) {
+        figureType = "circle";
+        return;
+    }
+    if (recognizedText.includes("pentagon")) {
+        figureType = "pentagon";
+        return;
+    }
+}
+
 function buildAveragedSpectrumRanges() {
     let n = 5;
     // console.log(spectralCentroid)
@@ -238,9 +296,12 @@ function buildAveragedSpectrumRanges() {
 
 function mouseClicked() {
     userStartAudio();
-    if (!sound.isLooping()) {
-        sound.loop();
+    if (!audio.isLooping()) {
+        audio.loop();
         analyzer.start();
+        speechRecognition.start();
+    } else {
+
     }
 }
 
@@ -263,11 +324,20 @@ function drawFigure(x, y, size, fillColor) {
 
     fill(fillColor);
 
-
-    drawCircle(x, y, size, noiseFactor);
-    // drawSquare(x, y, size, noiseFactor);
-
-
+    switch (figureType) {
+        case "square":
+            drawSquare(x, y, size, noiseFactor);
+            break;
+        case "triangle":
+            drawTriangle(x, y, size, noiseFactor);
+            break;
+        case "circle":
+            drawCircle(x, y, size, noiseFactor);
+            break;
+        case "pentagon":
+            drawPentagon(x, y, size, noiseFactor);
+            break;
+    }
 }
 
 // function drawPlot() {
@@ -326,16 +396,44 @@ function drawSquare(x, y, size, noiseFactor) {
 
     pop();
 }
-function drawTriangle(x, y, size) {
+
+function drawTriangle(x, y, size, noiseFactor) {
 
     beginShape();
+    let n = 100;
 
-    vertex(x, y - size / 2);
-    vertex(x - size / 2, y + size / 2);
-    vertex(x + size / 2, y + size / 2);
+    let xOffset = size / 2 / n;
+    let yOffset = size / n;
+    for (let i = 0; i < n; i++) {
+        let vertexX = x + xOffset * i;
+        let vertexY = y - size / 2 + yOffset * i;
+        let xNoiseOffset = noise(i * 0.1) * noiseFactor;
+        let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
+        vertex(vertexX + xNoiseOffset, vertexY - yNoiseOffset);
+        // vertex(vertexX, vertexY);
+    }
+
+    xOffset = size / n;
+    for (let i = 1; i < n; i++) {
+        let vertexX = x + size / 2 - xOffset * i;
+        let vertexY = y + size / 2;
+        let yNoiseOffset = noise(i * 0.1) * noiseFactor;
+        vertex(vertexX, vertexY + yNoiseOffset);
+    }
+
+    xOffset = size / 2 / n;
+    yOffset = size / n ;
+    for (let i = 1; i < n - 1; i++) {
+        let vertexX = x - size/2 + xOffset * i;
+        let vertexY = y + size / 2 - yOffset * i;
+        let xNoiseOffset = noise(i * 0.1) * noiseFactor;
+        let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
+        vertex(vertexX - xNoiseOffset, vertexY - yNoiseOffset);
+    }
 
     endShape(CLOSE);
 }
+
 function drawCircle(x, y, size, noiseFactor) {
 
 
@@ -367,7 +465,38 @@ function drawCircle(x, y, size, noiseFactor) {
 
 }
 function drawPentagon(x, y, size, noiseFactor) {
+    push();
+    translate(x, y);
+    beginShape();
 
+
+    let vertices = [];
+    for(let angle = - HALF_PI; angle < TWO_PI - HALF_PI; angle += TWO_PI / 5) {
+        let xOffset = (size / 2) * cos(angle);
+        let yOffset = (size / 2) * sin(angle);
+        vertices.push(createVector(xOffset, yOffset));
+    }
+
+    let n = 70;
+
+    for (let i = 0; i < vertices.length; i++) {
+        let startVertex = vertices[i];
+        let endVertex = vertices[(i + 1) % vertices.length];
+
+        let edge = p5.Vector.sub(endVertex, startVertex);
+        let normal = createVector(-edge.y, edge.x).normalize();
+
+        for (let j = 0; j <= n; j++) {
+            let alpha = map(j, 0, n, 0, 1);
+            let xOffset = lerp(startVertex.x, endVertex.x, alpha) - normal.x * (noise(j * 0.1) - 0.5) * noiseFactor;
+            let yOffset = lerp(startVertex.y, endVertex.y, alpha) - normal.y * (noise(j * 0.1) - 0.5) * noiseFactor;
+            vertex(xOffset, yOffset);
+        }
+    }
+
+    // let noiseOffset = noise(angle * 10) * noiseFactor
+    endShape(CLOSE);
+    pop();
 }
 
 
@@ -381,4 +510,17 @@ function avg(array) {
         sum += array[i];
     }
     return sum / array.length;
+}
+
+function parseResult()
+{
+    // recognition system will often append words into phrases.
+    // so hack here is to only use the last word:
+    var mostrecentword = myRec.resultString.split(' ').pop();
+    if(mostrecentword.indexOf("left")!==-1) { dx=-1;dy=0; }
+    else if(mostrecentword.indexOf("right")!==-1) { dx=1;dy=0; }
+    else if(mostrecentword.indexOf("up")!==-1) { dx=0;dy=-1; }
+    else if(mostrecentword.indexOf("down")!==-1) { dx=0;dy=1; }
+    else if(mostrecentword.indexOf("clear")!==-1) { background(255); }
+    console.log(mostrecentword);
 }
