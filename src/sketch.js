@@ -6,7 +6,7 @@ let backgroundColor;
 let figureType;
 
 let spectralCrest = 0;
-let rms = 1;
+let spectralRolloff = 0;
 
 let spectralSkewness = 0;
 let spectralSkewnessMin = 999;
@@ -50,23 +50,22 @@ function setup() {
         source: audio,
         bufferSize: 512,
         featureExtractors: [
-            "rms",
+            "powerSpectrum",
+            "spectralCentroid",
+            "spectralRolloff",
             "spectralSkewness",
             "spectralCrest",
-            "powerSpectrum",
-            "amplitudeSpectrum",
-            "spectralCentroid",
             "chroma",
             "perceptualSharpness"
         ],
         callback: (features) => {
-            spectralCrest = features.spectralCrest;
-            rms = features.rms;
-            spectralSkewness = features.spectralSkewness;
-            powerSpectrum = features.amplitudeSpectrum;
+            powerSpectrum = features.powerSpectrum;
             spectralCentroid = round(features.spectralCentroid);
+            spectralRolloff = features.spectralRolloff;
+            spectralSkewness = features.spectralSkewness;
+            spectralCrest = features.spectralCrest;
             chroma = features.chroma;
-            perceptualSharpness = features.spectralCrest;
+            perceptualSharpness = features.perceptualSharpness;
         }
     });
 
@@ -88,7 +87,37 @@ function draw() {
     drawGradientBackground();
 
     translate(width / 2, height / 2);
+    rotateVisualization();
 
+    scaleVisualization();
+
+    drawFigures();
+}
+
+function drawGradientBackground() {
+    let topColor = backgroundColor;
+
+    if (spectralCentroid < spectralCentroidMin) {
+        spectralCentroidMin = spectralCentroid;
+    }
+    if (spectralCentroid > spectralCentroidMax) {
+        spectralCentroidMax = spectralCentroid;
+    }
+    let bottomColor = color(
+        map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255),
+        (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 85) % 255,
+        (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 170) % 255
+    );
+
+    for (let x = 0; x <= 2 * width; x++) {
+        let lerpAmount = dist(0, 0, x, x) / dist(0, 0, width, height) / 2;
+        let currentColor = lerpColor(topColor, bottomColor, lerpAmount);
+        stroke(currentColor);
+        line(0, x, x, 0);
+    }
+}
+
+function rotateVisualization() {
     if(spectralSkewness < spectralSkewnessMin) {
         spectralSkewnessMin = spectralSkewness;
     }
@@ -96,10 +125,13 @@ function draw() {
         spectralSkewnessMax = spectralSkewness;
     }
     rotate(map(spectralSkewness, spectralSkewnessMin, spectralSkewnessMax, -0.15, 0.15));
-    scale(map(rms, 0, 1, 1, 1.5));
+}
 
+function scaleVisualization() {
+    scale(map(spectralRolloff, 5000, 22050, 0.8, 1.3));
+}
 
-
+function drawFigures() {
     let averagedSpectrumRanges = buildAveragedSpectrumRanges();
     for (let i = 0; i < averagedSpectrumRanges.length; i++) {
         if (averagedSpectrumRanges[i] < averagedSpectrumRangesMin[i]) {
@@ -154,7 +186,6 @@ function draw() {
             let colorRed = map(chroma[index], 0, 1, 0, 255);
             let colorGreen = map(chroma[index + 3], 0, 1, 0, 255);
             let colorBlue = map(chroma[index + 6], 0, 1, 0, 255);
-            let colorAlpha = map(chroma[index + 7], 0, 1, 200, 255);
 
             let maxColorCoef = 255 / max(colorRed, colorGreen, colorBlue);
             colorRed *= maxColorCoef;
@@ -163,29 +194,6 @@ function draw() {
 
             drawFigure(xDistanceToCenter, yDistanceToCenter, sizes[i + 4][j + 4], color(colorRed, colorGreen, colorBlue));
         }
-    }
-}
-
-function drawGradientBackground() {
-    let topColor = backgroundColor;
-
-    if (spectralCentroid < spectralCentroidMin) {
-        spectralCentroidMin = spectralCentroid;
-    }
-    if (spectralCentroid > spectralCentroidMax) {
-        spectralCentroidMax = spectralCentroid;
-    }
-    let bottomColor = color(
-        map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255),
-        (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 85) % 255,
-        (map(spectralCentroid, spectralCentroidMin, spectralCentroidMax, 0, 255) + 170) % 255
-    );
-
-    for (let x = 0; x <= 2 * width; x++) {
-        let lerpAmount = dist(0, 0, x, x) / dist(0, 0, width, height) / 2;
-        let currentColor = lerpColor(topColor, bottomColor, lerpAmount);
-        stroke(currentColor);
-        line(0, x, x, 0);
     }
 }
 
@@ -205,7 +213,6 @@ function buildAveragedSpectrumRanges() {
     for(let i = 0; i < n; i++) {
         result.push(avg(targetPowerSpectrum.slice(i * targetPowerSpectrum.length / 5, (i + 1) * targetPowerSpectrum.length / 5)))
     }
-
     return result;
 }
 
@@ -241,148 +248,105 @@ function drawFigure(x, y, size, fillColor) {
     }
 }
 
-// function drawPlot() {
-//     let startX = 20;
-//     let barWidth = (width - 40) / (sound.frames() / 512);
-//     let startY = 500;
-//
-//     for(let i = 1; i < featureValues.length-1 ; i++) {
-//         // let height = map(featureValues[i], 0, featureMax, 0, 300);
-//         let height = 0;
-//         // if (abs(featureValues[i].zcr - avg(featureValues.slice(i - 5, i))) > 15
-//         //     && featureValues[i].spectralKurtosis > 0.3
-//         //     // && featureValues[i].spectralSpread < 150
-//         // ) {
-//             // height = map(featureValues[i] - featureValues[i-1], -50, 0, 20, 300);
-//         if (featureValues[i].spectralCrest > featureValues[i-1].spectralCrest && featureValues[i].spectralCrest > featureValues[i+1].spectralCrest) {
-//             height = map(featureValues[i].spectralCrest, 0, 30, 0, 400);
-//         }
-//             // console.log(featureValues[i].spectralCrest);
-//         // }
-//         fill(color("red"));
-//         noStroke();
-//         // rect(startX + i * barWidth, startY - height, barWidth, height);
-//         rect(startX + i * barWidth, startY - height, barWidth, height);
-//     }
-// }
-
 function drawSquare(x, y, size, noiseFactor) {
     push();
-    translate(- size / 2, - size / 2);
+        translate(- size / 2, - size / 2);
 
-    beginShape();
-    for (let i = x; i <= x + size; i++) {
-        let yOffset = noise(i * 0.1) * noiseFactor;
-        vertex(i, y - yOffset);
-    }
-    for (let i = y ; i <= y + size; i++) {
-        let xOffset = noise(i * 0.1) * noiseFactor;
-        vertex(x + size + xOffset, i);
-    }
-    for (let i = x + size; i >= x; i--) {
-        let yOffset = noise(i * 0.1) * noiseFactor;
-        vertex(i, y + size + yOffset);
-    }
-    for (let i = y + size; i >= y; i--) {
-        let xOffset = noise(i * 0.1) * noiseFactor;
-        vertex(x - xOffset, i);
-    }
-    endShape(CLOSE);
-
+        beginShape();
+            for (let i = x; i <= x + size; i++) {
+                let yOffset = noise(i * 0.1) * noiseFactor;
+                vertex(i, y - yOffset);
+            }
+            for (let i = y ; i <= y + size; i++) {
+                let xOffset = noise(i * 0.1) * noiseFactor;
+                vertex(x + size + xOffset, i);
+            }
+            for (let i = x + size; i >= x; i--) {
+                let yOffset = noise(i * 0.1) * noiseFactor;
+                vertex(i, y + size + yOffset);
+            }
+            for (let i = y + size; i >= y; i--) {
+                let xOffset = noise(i * 0.1) * noiseFactor;
+                vertex(x - xOffset, i);
+            }
+        endShape(CLOSE);
     pop();
 }
 
 function drawTriangle(x, y, size, noiseFactor) {
-
     beginShape();
-    let detailsLevel = 100;
+        let detailsLevel = 100;
 
-    let xOffset = size / 2 / detailsLevel;
-    let yOffset = size / detailsLevel;
-    for (let i = 0; i < detailsLevel; i++) {
-        let vertexX = x + xOffset * i;
-        let vertexY = y - size / 2 + yOffset * i;
-        let xNoiseOffset = noise(i * 0.1) * noiseFactor;
-        let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
-        vertex(vertexX + xNoiseOffset, vertexY - yNoiseOffset);
-    }
+        let xOffset = size / 2 / detailsLevel;
+        let yOffset = size / detailsLevel;
+        for (let i = 0; i < detailsLevel; i++) {
+            let vertexX = x + xOffset * i;
+            let vertexY = y - size / 2 + yOffset * i;
+            let xNoiseOffset = noise(i * 0.1) * noiseFactor;
+            let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
+            vertex(vertexX + xNoiseOffset, vertexY - yNoiseOffset);
+        }
 
-    xOffset = size / detailsLevel;
-    for (let i = 1; i < detailsLevel; i++) {
-        let vertexX = x + size / 2 - xOffset * i;
-        let vertexY = y + size / 2;
-        let yNoiseOffset = noise(i * 0.1) * noiseFactor;
-        vertex(vertexX, vertexY + yNoiseOffset);
-    }
+        xOffset = size / detailsLevel;
+        for (let i = 1; i < detailsLevel; i++) {
+            let vertexX = x + size / 2 - xOffset * i;
+            let vertexY = y + size / 2;
+            let yNoiseOffset = noise(i * 0.1) * noiseFactor;
+            vertex(vertexX, vertexY + yNoiseOffset);
+        }
 
-    xOffset = size / 2 / detailsLevel;
-    yOffset = size / detailsLevel ;
-    for (let i = 1; i < detailsLevel - 1; i++) {
-        let vertexX = x - size/2 + xOffset * i;
-        let vertexY = y + size / 2 - yOffset * i;
-        let xNoiseOffset = noise(i * 0.1) * noiseFactor;
-        let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
-        vertex(vertexX - xNoiseOffset, vertexY - yNoiseOffset);
-    }
-
+        xOffset = size / 2 / detailsLevel;
+        yOffset = size / detailsLevel ;
+        for (let i = 1; i < detailsLevel - 1; i++) {
+            let vertexX = x - size/2 + xOffset * i;
+            let vertexY = y + size / 2 - yOffset * i;
+            let xNoiseOffset = noise(i * 0.1) * noiseFactor;
+            let yNoiseOffset = noise(i * 0.1) * noiseFactor * 0.5;
+            vertex(vertexX - xNoiseOffset, vertexY - yNoiseOffset);
+        }
     endShape(CLOSE);
 }
 
 function drawCircle(x, y, size, noiseFactor) {
-
-
     push();
         translate(x, y);
         beginShape();
-
-        // rotate(PI / 2);
-        // rect(x, y, 100, 50)
-
-        for(let angle = 0; angle < TWO_PI; angle += 0.02) {
-            let noiseOffset = noise(angle * 10) * noiseFactor
-            let xOffset = (size / 2 + noiseOffset) * cos(angle);
-            let yOffset = (size / 2 + noiseOffset) * sin(angle);
-            vertex(xOffset, yOffset);
-        }
+            for(let angle = 0; angle < TWO_PI; angle += 0.02) {
+                let noiseOffset = noise(angle * 10) * noiseFactor
+                let xOffset = (size / 2 + noiseOffset) * cos(angle);
+                let yOffset = (size / 2 + noiseOffset) * sin(angle);
+                vertex(xOffset, yOffset);
+            }
         endShape(CLOSE);
     pop();
-
-
-
-
-
 }
 function drawPentagon(x, y, size, noiseFactor) {
     push();
-    translate(x, y);
-    beginShape();
+        translate(x, y);
+        beginShape();
+            let vertices = [];
+            for(let angle = - HALF_PI; angle < TWO_PI - HALF_PI; angle += TWO_PI / 5) {
+                let xOffset = (size / 2) * cos(angle);
+                let yOffset = (size / 2) * sin(angle);
+                vertices.push(createVector(xOffset, yOffset));
+            }
 
+            let detailsLevel = 70;
+            for (let i = 0; i < vertices.length; i++) {
+                let startVertex = vertices[i];
+                let endVertex = vertices[(i + 1) % vertices.length];
 
-    let vertices = [];
-    for(let angle = - HALF_PI; angle < TWO_PI - HALF_PI; angle += TWO_PI / 5) {
-        let xOffset = (size / 2) * cos(angle);
-        let yOffset = (size / 2) * sin(angle);
-        vertices.push(createVector(xOffset, yOffset));
-    }
+                let edge = p5.Vector.sub(endVertex, startVertex);
+                let normal = createVector(-edge.y, edge.x).normalize();
 
-    let detailsLevel = 70;
-
-    for (let i = 0; i < vertices.length; i++) {
-        let startVertex = vertices[i];
-        let endVertex = vertices[(i + 1) % vertices.length];
-
-        let edge = p5.Vector.sub(endVertex, startVertex);
-        let normal = createVector(-edge.y, edge.x).normalize();
-
-        for (let j = 0; j <= detailsLevel; j++) {
-            let alpha = map(j, 0, detailsLevel, 0, 1);
-            let xOffset = lerp(startVertex.x, endVertex.x, alpha) - normal.x * (noise(j * 0.1) - 0.5) * noiseFactor;
-            let yOffset = lerp(startVertex.y, endVertex.y, alpha) - normal.y * (noise(j * 0.1) - 0.5) * noiseFactor;
-            vertex(xOffset, yOffset);
-        }
-    }
-
-    endShape(CLOSE);
+                for (let j = 0; j <= detailsLevel; j++) {
+                    let alpha = map(j, 0, detailsLevel, 0, 1);
+                    let xOffset = lerp(startVertex.x, endVertex.x, alpha) - normal.x * (noise(j * 0.1) - 0.5) * noiseFactor;
+                    let yOffset = lerp(startVertex.y, endVertex.y, alpha) - normal.y * (noise(j * 0.1) - 0.5) * noiseFactor;
+                    vertex(xOffset, yOffset);
+                }
+            }
+        endShape(CLOSE);
     pop();
 }
 
@@ -391,7 +355,6 @@ function avg(array) {
     if (array.length === 0) {
         return 0;
     }
-
     let sum = 0;
     for(let i = 0; i < array.length; i++) {
         sum += array[i];
