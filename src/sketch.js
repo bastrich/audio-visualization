@@ -1,3 +1,4 @@
+// start
 let audio;
 let analyzer;
 let speechRecognition;
@@ -415,3 +416,4 @@ function processSpeechInput() {
         return;
     }
 }
+// end
